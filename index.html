@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sandbox">
+<meta name="theme-color" content="#161b22">
+<link rel="manifest" id="pwa-manifest">
+<link rel="apple-touch-icon" id="apple-icon">
+<title>HTML 沙盒</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--accent:#58a6ff;--accent2:#3fb950;--accent3:#f78166;--text:#e6edf3;--text-dim:#8b949e}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+.app{display:flex;flex-direction:column;height:100%;height:100dvh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--accent2);box-shadow:0 0 7px var(--accent2);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
+.logo-icon{width:26px;height:26px;border-radius:6px;flex-shrink:0}
+.filename-input{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;outline:none}
+.filename-input:focus{border-color:var(--accent)}
+.tabbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;flex-shrink:0}
+.tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:500;color:var(--text-dim);border-bottom:2px solid transparent;cursor:pointer;user-select:none;transition:all .15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(88,166,255,.05)}
+.panels{flex:1;overflow:hidden;position:relative}
+.panel{position:absolute;inset:0;display:none;flex-direction:column}
+.panel.active{display:flex}
+.editor-meta{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 12px;font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.editor-wrap{flex:1;position:relative;overflow:hidden}
+textarea{width:100%;height:100%;background:var(--bg);color:var(--text);border:none;outline:none;resize:none;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;padding:14px;caret-color:var(--accent);-webkit-overflow-scrolling:touch}
+textarea::placeholder{color:var(--text-dim);opacity:.4}
+.drop-overlay{position:absolute;inset:0;background:rgba(13,17,23,.88);border:2px dashed var(--accent);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:10;backdrop-filter:blur(4px)}
+.drop-overlay.active{display:flex}
+.drop-icon{font-size:44px}
+.drop-text{font-size:15px;font-weight:600;color:var(--accent)}
+.preview-meta{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 12px;font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;display:flex;align-items:center;gap:8px;flex-shrink:0;overflow:hidden}
+.preview-status{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text-dim);font-size:13px;padding:3px 8px;cursor:pointer;flex-shrink:0}
+.preview-btn:active{background:var(--surface2)}
+.empty-preview{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--text-dim);background:var(--bg)}
+.empty-icon{font-size:44px;opacity:.3}
+.empty-text{font-size:14px}
+iframe{flex:1;border:none;background:#fff;display:none;width:100%}
+.actionbar{background:var(--surface);border-top:1px solid var(--border);padding:10px 12px;display:flex;gap:8px;flex-shrink:0}
+.btn{flex:1;font-family:'Noto Sans TC',sans-serif;font-size:14px;font-weight:600;padding:11px 8px;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .12s}
+.btn:active{transform:scale(.96)}
+.btn-run{background:var(--accent);color:#000}
+.btn-save{background:#238636;color:#fff}
+.btn-clear{background:rgba(247,129,102,.15);color:var(--accent3);border:1px solid rgba(247,129,102,.4)}
+.dlbar{background:#0d2a15;border-top:1px solid #238636;padding:10px 12px;display:none;align-items:center;gap:10px;flex-shrink:0}
+.dlbar.show{display:flex}
+.dl-label{font-size:13px;color:var(--accent2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-btn{background:var(--accent2);color:#000;font-weight:700;font-size:13px;padding:8px 18px;border-radius:7px;border:none;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.dl-btn:active{opacity:.8}
+.dl-close{background:transparent;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:0 4px}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:9px 20px;font-size:13px;color:var(--text);white-space:nowrap;opacity:0;transition:all .2s;z-index:999;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{border-color:#238636;color:var(--accent2)}
+.toast.error{border-color:#da3633;color:var(--accent3)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="logo">
+      <img class="logo-icon" id="logoIcon" alt="icon">
+      <div class="logo-dot"></div>
+      &lt;SANDBOX&gt;
+    </div>
+    <input class="filename-input" id="filename" value="test.html" placeholder="檔名.html">
+  </div>
+  <div class="tabbar">
+    <div class="tab active" id="tabEditor" onclick="switchTab('editor')">✏️ 編輯器</div>
+    <div class="tab" id="tabPreview" onclick="switchTab('preview')">🖥️ 預覽</div>
+  </div>
+  <div class="panels">
+    <div class="panel active" id="panelEditor">
+      <div class="editor-meta">
+        <span>HTML 原始碼</span>
+        <span id="lineCount">0 行 · 0 字元</span>
+      </div>
+      <div class="editor-wrap" id="editorWrap">
+        <textarea id="editor" placeholder="貼上 HTML 原始碼，或把 .html 檔案拖曳進來" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        <div class="drop-overlay" id="dropOverlay"><div class="drop-icon">📄</div><div class="drop-text">放開以載入 HTML 檔案</div></div>
+      </div>
+    </div>
+    <div class="panel" id="panelPreview">
+      <div class="preview-meta">
+        <span class="preview-status" id="previewStatus">尚未執行</span>
+        <button class="preview-btn" onclick="reloadPreview()">↺</button>
+        <button class="preview-btn" onclick="clearEditor()" style="color:var(--accent3);border-color:var(--accent3)">✕ 清除</button>
+      </div>
+      <div class="empty-preview" id="emptyPreview"><div class="empty-icon">🖥️</div><div class="empty-text">按「執行預覽」以查看結果</div></div>
+      <iframe id="preview" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"></iframe>
+    </div>
+  </div>
+  <div class="actionbar">
+    <button class="btn btn-clear" onclick="clearEditor()">✕ 清除</button>
+    <button class="btn btn-save" onclick="saveFile()">⬇ 儲存</button>
+    <button class="btn btn-run" onclick="runPreview()">▶ 執行</button>
+  </div>
+  <div class="dlbar" id="dlbar">
+    <span class="dl-label" id="dlLabel">📄 test.html</span>
+    <button class="dl-btn" id="dlBtn" onclick="doDownload()">📋 複製原始碼</button>
+    <button class="dl-close" onclick="closeDlBar()">✕</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// ── PWA inline resources ──
+(function(){
+  var ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMGQxMTE3Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6IzE2MWIyMiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYnJhY2tldC1sIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6Izc5YzBmZiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM1OGE2ZmYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJyYWNrZXQtciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMzZmI5NTAiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNTZkMzY0Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGZpbHRlciBpZD0ic2hhZG93Ij4KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjMiIHN0ZERldmlhdGlvbj0iMTAiIGZsb29kLWNvbG9yPSIjNThhNmZmIiBmbG9vZC1vcGFjaXR5PSIwLjI1Ii8+CiAgICA8L2ZpbHRlcj4KICAgIDxmaWx0ZXIgaWQ9ImdvbGQtZ2xvdyI+CiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIwIiBzdGREZXZpYXRpb249IjgiIGZsb29kLWNvbG9yPSIjZjBiNDI5IiBmbG9vZC1vcGFjaXR5PSIwLjciLz4KICAgIDwvZmlsdGVyPgogIDwvZGVmcz4KCiAgPCEtLSBCYWNrZ3JvdW5kIC0tPgogIDxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTEyIiByeT0iMTEyIiBmaWxsPSJ1cmwoI2JnKSIvPgoKICA8IS0tIFN1YnRsZSBncmlkIC0tPgogIDxnIHN0cm9rZT0iIzMwMzYzZCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjMiPgogICAgPGxpbmUgeDE9IjAiIHkxPSIyNTYiIHgyPSI1MTIiIHkyPSIyNTYiLz4KICAgIDxsaW5lIHgxPSIyNTYiIHkxPSIwIiB4Mj0iMjU2IiB5Mj0iNTEyIi8+CiAgPC9nPgoKICA8IS0tIExlZnQgYnJhY2tldCA8IC0tPgogIDxnIGZpbHRlcj0idXJsKCNzaGFkb3cpIj4KICAgIDxwb2x5bGluZSBwb2ludHM9IjE5NiwxMDAgOTYsMjI0IDE5NiwzNDgiCiAgICAgIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNicmFja2V0LWwpIiBzdHJva2Utd2lkdGg9IjQ0IgogICAgICBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8L2c+CgogIDwhLS0gUmlnaHQgYnJhY2tldCA+IC0tPgogIDxnIGZpbHRlcj0idXJsKCNzaGFkb3cpIj4KICAgIDxwb2x5bGluZSBwb2ludHM9IjMxNiwxMDAgNDE2LDIyNCAzMTYsMzQ4IgogICAgICBmaWxsPSJub25lIiBzdHJva2U9InVybCgjYnJhY2tldC1yKSIgc3Ryb2tlLXdpZHRoPSI0NCIKICAgICAgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPC9nPgoKICA8IS0tIEdvbGQgc2xhc2ggLyAtLT4KICA8ZyBmaWx0ZXI9InVybCgjZ29sZC1nbG93KSI+CiAgICA8bGluZSB4MT0iMjg2IiB5MT0iMTEyIiB4Mj0iMjI2IiB5Mj0iMzM2IgogICAgICBzdHJva2U9IiNmMGI0MjkiIHN0cm9rZS13aWR0aD0iMzgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDwvZz4KCiAgPCEtLSBEaXZpZGVyIC0tPgogIDxsaW5lIHgxPSI3MiIgeTE9IjM3NCIgeDI9IjQ0MCIgeTI9IjM3NCIKICAgIHN0cm9rZT0iIzU4YTZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIG9wYWNpdHk9IjAuMyIvPgoKICA8IS0tIEhUTUwgbGFiZWwg4oCUIGJlbG93IGRpdmlkZXIsIGNsZWFyIG9mIGJyYWNrZXRzIC0tPgogIDx0ZXh0IHg9IjI1NiIgeT0iNDU4IgogICAgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIKICAgIGZvbnQtc2l6ZT0iODIiIGZvbnQtd2VpZ2h0PSI3MDAiCiAgICB0ZXh0LWFuY2hvcj0ibWlkZGxlIgogICAgbGV0dGVyLXNwYWNpbmc9IjUiCiAgICBmaWxsPSIjNThhNmZmIiBvcGFjaXR5PSIwLjk1Ij5IVE1MPC90ZXh0PgoKICA8IS0tIEdyZWVuIGRvdCAtLT4KICA8Y2lyY2xlIGN4PSI0MDIiIGN5PSIxMDYiIHI9IjE4IiBmaWxsPSIjMGQxMTE3Ii8+CiAgPGNpcmNsZSBjeD0iNDAyIiBjeT0iMTA2IiByPSIxMiIgZmlsbD0iIzNmYjk1MCIvPgoKICA8IS0tIEJvcmRlciByaW5nIC0tPgogIDxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSI1MDYiIGhlaWdodD0iNTA2IiByeD0iMTEwIiByeT0iMTEwIgogICAgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzAzNjNkIiBzdHJva2Utd2lkdGg9IjIiIG9wYWNpdHk9IjAuNSIvPgo8L3N2Zz4K';
+  var MANIFEST = 'data:application/json;base64,eyJuYW1lIjogIkhUTUwgXHU2Yzk5XHU3NmQyIiwgInNob3J0X25hbWUiOiAiU2FuZGJveCIsICJkZXNjcmlwdGlvbiI6ICJcdThjYmNcdTRlMGEgSFRNTCBcdTUzOWZcdTU5Y2JcdTc4YmNcdTUzNzNcdTY2NDJcdTk4MTBcdTg5YmRcdTZlMmNcdThhNjZcdTVkZTVcdTUxNzciLCAic3RhcnRfdXJsIjogIi4vIiwgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwZDExMTciLCAidGhlbWVfY29sb3IiOiAiIzE2MWIyMiIsICJvcmllbnRhdGlvbiI6ICJwb3J0cmFpdC1wcmltYXJ5IiwgImljb25zIjogW3sic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0ExTVRJZ05URXlJajRLSUNBOFpHVm1jejRLSUNBZ0lEeHNhVzVsWVhKSGNtRmthV1Z1ZENCcFpEMGlZbWNpSUhneFBTSXdKU0lnZVRFOUlqQWxJaUI0TWowaU1UQXdKU0lnZVRJOUlqRXdNQ1VpUGdvZ0lDQWdJQ0E4YzNSdmNDQnZabVp6WlhROUlqQWxJaUJ6ZEhsc1pUMGljM1J2Y0MxamIyeHZjam9qTUdReE1URTNJaTgrQ2lBZ0lDQWdJRHh6ZEc5d0lHOW1abk5sZEQwaU1UQXdKU0lnYzNSNWJHVTlJbk4wYjNBdFkyOXNiM0k2SXpFMk1XSXlNaUl2UGdvZ0lDQWdQQzlzYVc1bFlYSkhjbUZrYVdWdWRENEtJQ0FnSUR4c2FXNWxZWEpIY21Ga2FXVnVkQ0JwWkQwaVluSmhZMnRsZEMxc0lpQjRNVDBpTUNVaUlIa3hQU0l3SlNJZ2VESTlJakV3TUNVaUlIa3lQU0l4TURBbElqNEtJQ0FnSUNBZ1BITjBiM0FnYjJabWMyVjBQU0l3SlNJZ2MzUjViR1U5SW5OMGIzQXRZMjlzYjNJNkl6YzVZekJtWmlJdlBnb2dJQ0FnSUNBOGMzUnZjQ0J2Wm1aelpYUTlJakV3TUNVaUlITjBlV3hsUFNKemRHOXdMV052Ykc5eU9pTTFPR0UyWm1ZaUx6NEtJQ0FnSUR3dmJHbHVaV0Z5UjNKaFpHbGxiblErQ2lBZ0lDQThiR2x1WldGeVIzSmhaR2xsYm5RZ2FXUTlJbUp5WVdOclpYUXRjaUlnZURFOUlqQWxJaUI1TVQwaU1DVWlJSGd5UFNJeE1EQWxJaUI1TWowaU1UQXdKU0krQ2lBZ0lDQWdJRHh6ZEc5d0lHOW1abk5sZEQwaU1DVWlJSE4wZVd4bFBTSnpkRzl3TFdOdmJHOXlPaU16Wm1JNU5UQWlMejRLSUNBZ0lDQWdQSE4wYjNBZ2IyWm1jMlYwUFNJeE1EQWxJaUJ6ZEhsc1pUMGljM1J2Y0MxamIyeHZjam9qTlRaa016WTBJaTgrQ2lBZ0lDQThMMnhwYm1WaGNrZHlZV1JwWlc1MFBnb2dJQ0FnUEdacGJIUmxjaUJwWkQwaWMyaGhaRzkzSWo0S0lDQWdJQ0FnUEdabFJISnZjRk5vWVdSdmR5QmtlRDBpTUNJZ1pIazlJak1pSUhOMFpFUmxkbWxoZEdsdmJqMGlNVEFpSUdac2IyOWtMV052Ykc5eVBTSWpOVGhoTm1abUlpQm1iRzl2WkMxdmNHRmphWFI1UFNJd0xqSTFJaTgrQ2lBZ0lDQThMMlpwYkhSbGNqNEtJQ0FnSUR4bWFXeDBaWElnYVdROUltZHZiR1F0WjJ4dmR5SStDaUFnSUNBZ0lEeG1aVVJ5YjNCVGFHRmtiM2NnWkhnOUlqQWlJR1I1UFNJd0lpQnpkR1JFWlhacFlYUnBiMjQ5SWpnaUlHWnNiMjlrTFdOdmJHOXlQU0lqWmpCaU5ESTVJaUJtYkc5dlpDMXZjR0ZqYVhSNVBTSXdMamNpTHo0S0lDQWdJRHd2Wm1sc2RHVnlQZ29nSUR3dlpHVm1jejRLQ2lBZ1BDRXRMU0JDWVdOclozSnZkVzVrSUMwdFBnb2dJRHh5WldOMElIZHBaSFJvUFNJMU1USWlJR2hsYVdkb2REMGlOVEV5SWlCeWVEMGlNVEV5SWlCeWVUMGlNVEV5SWlCbWFXeHNQU0oxY213b0kySm5LU0l2UGdvS0lDQThJUzB0SUZOMVluUnNaU0JuY21sa0lDMHRQZ29nSUR4bklITjBjbTlyWlQwaUl6TXdNell6WkNJZ2MzUnliMnRsTFhkcFpIUm9QU0l4SWlCdmNHRmphWFI1UFNJd0xqTWlQZ29nSUNBZ1BHeHBibVVnZURFOUlqQWlJSGt4UFNJeU5UWWlJSGd5UFNJMU1USWlJSGt5UFNJeU5UWWlMejRLSUNBZ0lEeHNhVzVsSUhneFBTSXlOVFlpSUhreFBTSXdJaUI0TWowaU1qVTJJaUI1TWowaU5URXlJaTgrQ2lBZ1BDOW5QZ29LSUNBOElTMHRJRXhsWm5RZ1luSmhZMnRsZENBOElDMHRQZ29nSUR4bklHWnBiSFJsY2owaWRYSnNLQ056YUdGa2IzY3BJajRLSUNBZ0lEeHdiMng1YkdsdVpTQndiMmx1ZEhNOUlqRTVOaXd4TURBZ09UWXNNakkwSURFNU5pd3pORGdpQ2lBZ0lDQWdJR1pwYkd3OUltNXZibVVpSUhOMGNtOXJaVDBpZFhKc0tDTmljbUZqYTJWMExXd3BJaUJ6ZEhKdmEyVXRkMmxrZEdnOUlqUTBJZ29nSUNBZ0lDQnpkSEp2YTJVdGJHbHVaV05oY0QwaWNtOTFibVFpSUhOMGNtOXJaUzFzYVc1bGFtOXBiajBpY205MWJtUWlMejRLSUNBOEwyYytDZ29nSUR3aExTMGdVbWxuYUhRZ1luSmhZMnRsZENBK0lDMHRQZ29nSUR4bklHWnBiSFJsY2owaWRYSnNLQ056YUdGa2IzY3BJajRLSUNBZ0lEeHdiMng1YkdsdVpTQndiMmx1ZEhNOUlqTXhOaXd4TURBZ05ERTJMREl5TkNBek1UWXNNelE0SWdvZ0lDQWdJQ0JtYVd4c1BTSnViMjVsSWlCemRISnZhMlU5SW5WeWJDZ2pZbkpoWTJ0bGRDMXlLU0lnYzNSeWIydGxMWGRwWkhSb1BTSTBOQ0lLSUNBZ0lDQWdjM1J5YjJ0bExXeHBibVZqWVhBOUluSnZkVzVrSWlCemRISnZhMlV0YkdsdVpXcHZhVzQ5SW5KdmRXNWtJaTgrQ2lBZ1BDOW5QZ29LSUNBOElTMHRJRWR2YkdRZ2MyeGhjMmdnTHlBdExUNEtJQ0E4WnlCbWFXeDBaWEk5SW5WeWJDZ2paMjlzWkMxbmJHOTNLU0krQ2lBZ0lDQThiR2x1WlNCNE1UMGlNamcySWlCNU1UMGlNVEV5SWlCNE1qMGlNakkySWlCNU1qMGlNek0ySWdvZ0lDQWdJQ0J6ZEhKdmEyVTlJaU5tTUdJME1qa2lJSE4wY205clpTMTNhV1IwYUQwaU16Z2lJSE4wY205clpTMXNhVzVsWTJGd1BTSnliM1Z1WkNJdlBnb2dJRHd2Wno0S0NpQWdQQ0V0TFNCRWFYWnBaR1Z5SUMwdFBnb2dJRHhzYVc1bElIZ3hQU0kzTWlJZ2VURTlJak0zTkNJZ2VESTlJalEwTUNJZ2VUSTlJak0zTkNJS0lDQWdJSE4wY205clpUMGlJelU0WVRabVppSWdjM1J5YjJ0bExYZHBaSFJvUFNJeExqVWlJRzl3WVdOcGRIazlJakF1TXlJdlBnb0tJQ0E4SVMwdElFaFVUVXdnYkdGaVpXd2c0b0NVSUdKbGJHOTNJR1JwZG1sa1pYSXNJR05zWldGeUlHOW1JR0p5WVdOclpYUnpJQzB0UGdvZ0lEeDBaWGgwSUhnOUlqSTFOaUlnZVQwaU5EVTRJZ29nSUNBZ1ptOXVkQzFtWVcxcGJIazlJaWREYjNWeWFXVnlJRTVsZHljc0lHMXZibTl6Y0dGalpTSUtJQ0FnSUdadmJuUXRjMmw2WlQwaU9ESWlJR1p2Ym5RdGQyVnBaMmgwUFNJM01EQWlDaUFnSUNCMFpYaDBMV0Z1WTJodmNqMGliV2xrWkd4bElnb2dJQ0FnYkdWMGRHVnlMWE53WVdOcGJtYzlJalVpQ2lBZ0lDQm1hV3hzUFNJak5UaGhObVptSWlCdmNHRmphWFI1UFNJd0xqazFJajVJVkUxTVBDOTBaWGgwUGdvS0lDQThJUzB0SUVkeVpXVnVJR1J2ZENBdExUNEtJQ0E4WTJseVkyeGxJR040UFNJME1ESWlJR041UFNJeE1EWWlJSEk5SWpFNElpQm1hV3hzUFNJak1HUXhNVEUzSWk4K0NpQWdQR05wY21Oc1pTQmplRDBpTkRBeUlpQmplVDBpTVRBMklpQnlQU0l4TWlJZ1ptbHNiRDBpSXpObVlqazFNQ0l2UGdvS0lDQThJUzB0SUVKdmNtUmxjaUJ5YVc1bklDMHRQZ29nSUR4eVpXTjBJSGc5SWpNaUlIazlJak1pSUhkcFpIUm9QU0kxTURZaUlHaGxhV2RvZEQwaU5UQTJJaUJ5ZUQwaU1URXdJaUJ5ZVQwaU1URXdJZ29nSUNBZ1ptbHNiRDBpYm05dVpTSWdjM1J5YjJ0bFBTSWpNekF6TmpOa0lpQnpkSEp2YTJVdGQybGtkR2c5SWpJaUlHOXdZV05wZEhrOUlqQXVOU0l2UGdvOEwzTjJaejRLIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9zdmcreG1sIiwgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIn1dfQ==';
+  var SW = 'data:text/javascript;base64,Y29uc3QgQ0FDSEU9J3NhbmRib3gtdjEnO3NlbGYuYWRkRXZlbnRMaXN0ZW5lcignaW5zdGFsbCcsZT0+e3NlbGYuc2tpcFdhaXRpbmcoKTt9KTtzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2FjdGl2YXRlJyxlPT57ZS53YWl0VW50aWwoc2VsZi5jbGllbnRzLmNsYWltKCkpO30pO3NlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLGU9PntlLnJlc3BvbmRXaXRoKGZldGNoKGUucmVxdWVzdCkuY2F0Y2goKCk9Pm5ldyBSZXNwb25zZSgnb2ZmbGluZScpKSk7fSk7';
+  document.getElementById('pwa-manifest').href = MANIFEST;
+  document.getElementById('apple-icon').href = ICON;
+  document.getElementById('logoIcon').src = ICON;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register(SW, {scope: './'}).catch(function(){});
+  }
+})();
+
+// ── App ──
+var editor = document.getElementById('editor');
+var preview = document.getElementById('preview');
+var emptyPreview = document.getElementById('emptyPreview');
+var lineCount = document.getElementById('lineCount');
+var previewStatus = document.getElementById('previewStatus');
+var toast = document.getElementById('toast');
+var editorWrap = document.getElementById('editorWrap');
+var dropOverlay = document.getElementById('dropOverlay');
+var filenameInput = document.getElementById('filename');
+var lastHtml = '';
+var savedName = 'test.html';
+
+function switchTab(tab) {
+  document.getElementById('panelEditor').classList.toggle('active', tab==='editor');
+  document.getElementById('panelPreview').classList.toggle('active', tab==='preview');
+  document.getElementById('tabEditor').classList.toggle('active', tab==='editor');
+  document.getElementById('tabPreview').classList.toggle('active', tab==='preview');
+}
+
+editor.addEventListener('input', function() {
+  var txt = editor.value;
+  lineCount.textContent = (txt ? txt.split('\n').length : 0) + ' 行 · ' + txt.length + ' 字元';
+});
+
+function runPreview() {
+  var html = editor.value.trim();
+  if (!html) { showToast('⚠️ 請先貼上 HTML 內容','error'); return; }
+  lastHtml = html;
+  preview.srcdoc = html;
+  emptyPreview.style.display = 'none';
+  preview.style.display = 'block';
+  previewStatus.textContent = '✓ 預覽已載入';
+  showToast('✓ 預覽已更新','success');
+  switchTab('preview');
+}
+
+function reloadPreview() {
+  if (!lastHtml) return;
+  preview.srcdoc = '';
+  setTimeout(function(){ preview.srcdoc = lastHtml; }, 80);
+  showToast('↺ 已重新整理','');
+}
+
+function saveFile() {
+  var html = editor.value.trim();
+  if (!html) { showToast('⚠️ 沒有內容可儲存','error'); return; }
+  savedName = filenameInput.value.trim() || 'test.html';
+  if (!savedName.match(/\.html?$/i)) savedName += '.html';
+  document.getElementById('dlLabel').textContent = '📄 ' + savedName + ' 已備妥';
+  document.getElementById('dlbar').classList.add('show');
+  showToast('✓ 點「複製原始碼」取得檔案','success');
+}
+
+function doDownload() {
+  var html = editor.value.trim();
+  if (!html) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(html).then(function(){
+      document.getElementById('dlBtn').textContent = '✓ 已複製！';
+      showToast('✓ 原始碼已複製到剪貼簿','success');
+      setTimeout(function(){ document.getElementById('dlBtn').textContent = '📋 複製原始碼'; }, 2500);
+    }).catch(function(){ fallbackCopy(html); });
+  } else { fallbackCopy(html); }
+}
+
+function fallbackCopy(text) {
+  editor.focus(); editor.select();
+  try {
+    document.execCommand('copy');
+    document.getElementById('dlBtn').textContent = '✓ 已複製！';
+    showToast('✓ 原始碼已複製到剪貼簿','success');
+    setTimeout(function(){ document.getElementById('dlBtn').textContent = '📋 複製原始碼'; }, 2500);
+    switchTab('editor');
+  } catch(e) { showToast('⚠️ 請手動全選編輯器複製','error'); }
+}
+
+function closeDlBar() { document.getElementById('dlbar').classList.remove('show'); }
+
+function clearEditor() {
+  editor.value = ''; lastHtml = '';
+  preview.srcdoc = ''; preview.style.display = 'none';
+  emptyPreview.style.display = 'flex';
+  previewStatus.textContent = '尚未執行';
+  lineCount.textContent = '0 行 · 0 字元';
+  document.getElementById('dlbar').classList.remove('show');
+  switchTab('editor');
+}
+
+editorWrap.addEventListener('dragover', function(e){ e.preventDefault(); dropOverlay.classList.add('active'); });
+editorWrap.addEventListener('dragleave', function(e){ if(!editorWrap.contains(e.relatedTarget)) dropOverlay.classList.remove('active'); });
+editorWrap.addEventListener('drop', function(e){
+  e.preventDefault(); dropOverlay.classList.remove('active');
+  var file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.match(/\.html?$/i)) { showToast('⚠️ 請放入 .html 檔案','error'); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev){ editor.value = ev.target.result; filenameInput.value = file.name; editor.dispatchEvent(new Event('input')); showToast('📄 已載入 '+file.name,'success'); };
+  reader.readAsText(file,'utf-8');
+});
+
+document.addEventListener('keydown', function(e){
+  if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); runPreview(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); saveFile(); }
+});
+
+var toastTimer;
+function showToast(msg, type){
+  clearTimeout(toastTimer);
+  toast.textContent = msg;
+  toast.className = 'toast show' + (type?' '+type:'');
+  toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 2500);
+}
+</script>
+</body>
+</html>
