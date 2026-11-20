@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Python 沙盒</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --panel: #0d1117;
+    --bar: #111827;
+    --border: #1e3a5f;
+    --text: #e6edf6;
+    --muted: #7b8aa0;
+    --accent: #00d4ff;
+    --green: #a3e635;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --fs: 14px;
+    --lh: 22px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--bar);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; }
+  .logo-icon {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: linear-gradient(135deg, #00d4ff, #7c3aed);
+    display: flex; align-items: center; justify-content: center; font-size: .9rem;
+  }
+  .status { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: var(--muted); font-family: var(--mono); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); }
+  .dot.ready { background: #22c55e; }
+  .dot.busy { background: var(--yellow); animation: blink 1s infinite; }
+  .dot.fail { background: #ef4444; }
+  @keyframes blink { 50% { opacity: .35; } }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; background: #0f1623;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+  button {
+    font-family: var(--mono); font-size: .8rem; cursor: pointer; white-space: nowrap;
+    border-radius: 6px; padding: 7px 14px; border: 1px solid var(--border);
+    background: rgba(255,255,255,.06); color: #a9b6c9; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #run { background: linear-gradient(135deg, #00c9a7, #00d4ff); color: #000; font-weight: 700; border: none; }
+  #stop { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+  .chip { background: rgba(124,58,237,.16); color: #b9a2f8; border-color: rgba(124,58,237,.35); padding: 6px 11px; font-size: .75rem; }
+
+  main { display: flex; flex: 1; min-height: 0; }
+  .pane { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; }
+  .pane + .pane { border-left: 1px solid var(--border); }
+  .pane-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px; background: rgba(17,24,39,.95);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: .68rem; color: var(--muted); flex-shrink: 0;
+  }
+
+  .editor { display: flex; flex: 1; min-height: 0; background: var(--panel); }
+  #gutter {
+    padding: 12px 8px 60px 10px; min-width: 40px; text-align: right;
+    font-family: var(--mono); font-size: var(--fs); line-height: var(--lh);
+    color: #3b4a60; user-select: none; -webkit-user-select: none; white-space: pre;
+    border-right: 1px solid #172338; overflow: hidden; flex-shrink: 0;
+  }
+  #code {
+    flex: 1; min-width: 0; border: 0; outline: 0; resize: none;
+    padding: 12px; background: var(--panel); color: var(--text);
+    font-family: var(--mono); font-size: var(--fs); line-height: var(--lh);
+    white-space: pre; overflow: auto; tab-size: 4; -moz-tab-size: 4;
+    caret-color: var(--accent); -webkit-appearance: none; border-radius: 0;
+  }
+
+  #out {
+    flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; background: #07101a;
+    font-family: var(--mono); font-size: var(--fs); line-height: var(--lh);
+    white-space: pre-wrap; word-break: break-word;
+    -webkit-user-select: text; user-select: text;
+  }
+  .o-out { color: var(--green); }
+  .o-err { color: var(--red); }
+  .o-sys { color: var(--accent); }
+  .o-dim { color: #4b5b70; }
+
+  @media (max-width: 760px) {
+    main { flex-direction: column; }
+    .pane + .pane { border-left: 0; border-top: 1px solid var(--border); }
+    .pane.editor-pane { flex: 1.1 1 0; }
+    :root { --fs: 16px; --lh: 24px; } /* 16px 以上 iOS 聚焦時才不會自動放大 */
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-icon">🐍</div>Python 沙盒</div>
+  <div class="status"><span class="dot" id="dot"></span><span id="status">載入引擎中…</span></div>
+</header>
+
+<div class="toolbar">
+  <button id="run" disabled>▶ 執行</button>
+  <button id="stop" hidden>■ 停止</button>
+  <button id="clear">清除輸出</button>
+  <span class="sep"></span>
+  <button class="chip" data-ex="hello">Hello</button>
+  <button class="chip" data-ex="fib">費氏數列</button>
+  <button class="chip" data-ex="sort">排序</button>
+  <button class="chip" data-ex="cls">類別</button>
+  <button class="chip" data-ex="numpy">NumPy</button>
+  <button class="chip" data-ex="err">錯誤示範</button>
+</div>
+
+<main>
+  <section class="pane editor-pane">
+    <div class="pane-head"><span>main.py</span><span>Ctrl/⌘ + Enter 執行</span></div>
+    <div class="editor">
+      <div id="gutter" aria-hidden="true">1</div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Python 程式碼"></textarea>
+    </div>
+  </section>
+  <section class="pane">
+    <div class="pane-head"><span>輸出</span><span id="time"></span></div>
+    <div id="out"></div>
+  </section>
+</main>
+
+<!-- Worker 原始碼：Pyodide 在背景執行緒跑，所以無窮迴圈時可以直接終止 -->
+<script type="text/plain" id="worker-src">
+const PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+let py = null;
+
+function cleanTb(msg) {
+  const i = msg.indexOf('File "<exec>"');
+  if (i < 0) return msg.trim();
+  return ('Traceback (most recent call last):\n  ' + msg.slice(i)).trim();
+}
+
+self.onmessage = async (e) => {
+  const m = e.data;
+
+  if (m.type === 'init') {
+    try {
+      importScripts(PYODIDE_URL);
+      py = await loadPyodide();
+      // 用 write（而非 batched），沒有換行結尾的輸出（print(..., end="")）才不會被吞掉
+      const decOut = new TextDecoder(), decErr = new TextDecoder();
+      py.setStdout({ write: (buf) => { self.postMessage({ type: 'out', text: decOut.decode(buf, { stream: true }) }); return buf.length; } });
+      py.setStderr({ write: (buf) => { self.postMessage({ type: 'err', text: decErr.decode(buf, { stream: true }) }); return buf.length; } });
+      py.setStdin({ stdin: () => null }); // input() 會得到 EOF
+      var pyv = py.runPython("import sys; '.'.join(map(str, sys.version_info[:3]))");
+      self.postMessage({ type: 'ready', version: pyv });
+    } catch (err) {
+      self.postMessage({ type: 'initfail', text: String((err && err.message) || err) });
+    }
+    return;
+  }
+
+  if (m.type === 'run') {
+    const t0 = performance.now();
+    const ms = () => Math.round(performance.now() - t0);
+    try {
+      await py.loadPackagesFromImports(m.code, {
+        messageCallback: (s) => self.postMessage({ type: 'sys', text: s + '\n' }),
+        errorCallback: (s) => self.postMessage({ type: 'sys', text: '⚠ ' + s + '\n' })
+      });
+      const g = py.globals.get('dict')();
+      g.set('__name__', '__main__');
+      try {
+        await py.runPythonAsync(m.code, { globals: g });
+      } finally {
+        g.destroy();
+      }
+      py.runPython('import sys; sys.stdout.flush(); sys.stderr.flush()');
+      self.postMessage({ type: 'done', ms: ms() });
+    } catch (err) {
+      try { py.runPython('import sys; sys.stdout.flush(); sys.stderr.flush()'); } catch (_) {}
+      self.postMessage({ type: 'error', text: cleanTb(String((err && err.message) || err)), ms: ms() });
+    }
+  }
+};
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var EXAMPLES = {
+    hello: [
+      '# 基本 Hello World',
+      'name = "Python 沙盒"',
+      'print(f"👋 歡迎使用 {name}！")',
+      '',
+      'for i in range(1, 6):',
+      '    print(f"  第 {i} 步：繼續學習！")'
+    ].join('\n'),
+
+    fib: [
+      '# 費氏數列：迭代與生成器',
+      'def fib_iter(n):',
+      '    a, b = 0, 1',
+      '    for _ in range(n):',
+      '        a, b = b, a + b',
+      '    return a',
+      '',
+      'def fib_gen(limit):',
+      '    a, b = 0, 1',
+      '    while a < limit:',
+      '        yield a',
+      '        a, b = b, a + b',
+      '',
+      'print("前 10 項：", [fib_iter(i) for i in range(10)])',
+      'print("小於 100：", list(fib_gen(100)))',
+      'print("第 90 項：", fib_iter(90))'
+    ].join('\n'),
+
+    sort: [
+      'import random',
+      '',
+      'def quick_sort(arr):',
+      '    if len(arr) <= 1:',
+      '        return arr',
+      '    p = arr[len(arr) // 2]',
+      '    return (quick_sort([x for x in arr if x < p])',
+      '            + [x for x in arr if x == p]',
+      '            + quick_sort([x for x in arr if x > p]))',
+      '',
+      'data = random.sample(range(100), 10)',
+      'print("原始：", data)',
+      'print("快速排序：", quick_sort(data))',
+      'print("內建 sorted：", sorted(data))'
+    ].join('\n'),
+
+    cls: [
+      'class Animal:',
+      '    def __init__(self, name, sound):',
+      '        self.name = name',
+      '        self.sound = sound',
+      '',
+      '    def speak(self):',
+      '        return f"{self.name} 說：{self.sound}！"',
+      '',
+      'class Dog(Animal):',
+      '    def __init__(self, name):',
+      '        super().__init__(name, "汪汪")',
+      '        self.tricks = []',
+      '',
+      '    def learn(self, trick):',
+      '        self.tricks.append(trick)',
+      '        return f"{self.name} 學會了 {trick}！"',
+      '',
+      'dog = Dog("小黑")',
+      'print(dog.speak())',
+      'print(dog.learn("握手"))',
+      'print(dog.learn("翻滾"))',
+      'print("技能：", dog.tricks)'
+    ].join('\n'),
+
+    numpy: [
+      '# 第一次執行會自動下載 NumPy（數 MB），請稍候',
+      'import numpy as np',
+      '',
+      'a = np.arange(1, 6)',
+      'print("a =", a)',
+      'print("a * 2 =", a * 2)',
+      'print("平均 =", a.mean())',
+      '',
+      'm = np.arange(9).reshape(3, 3)',
+      'print(m)',
+      'print("轉置：")',
+      'print(m.T)'
+    ].join('\n'),
+
+    err: [
+      '# 故意出錯，看看錯誤訊息',
+      'def divide(a, b):',
+      '    return a / b',
+      '',
+      'print("開始")',
+      'print(divide(10, 2))',
+      'print(divide(1, 0))',
+      'print("這行不會執行")'
+    ].join('\n')
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var codeEl = $('code'), gutter = $('gutter'), out = $('out');
+  var runBtn = $('run'), stopBtn = $('stop'), dot = $('dot'), statusEl = $('status'), timeEl = $('time');
+
+  var worker = null, state = 'loading', outChars = 0, truncated = false;
+  var MAX_CHARS = 200000;
+
+  // ── 狀態 ──────────────────────────────────────────────
+  var readyLabel = 'Python';
+  function setState(s, text) {
+    if (s === 'ready' && /^Python \d/.test(text)) readyLabel = text;
+    state = s;
+    dot.className = 'dot ' + (s === 'ready' ? 'ready' : s === 'busy' ? 'busy' : s === 'fail' ? 'fail' : '');
+    statusEl.textContent = text;
+    runBtn.disabled = (s !== 'ready');
+    runBtn.textContent = s === 'busy' ? '⏳ 執行中' : '▶ 執行';
+    stopBtn.hidden = (s !== 'busy');
+  }
+
+  // ── 輸出 ──────────────────────────────────────────────
+  function put(text, cls) {
+    if (truncated) return;
+    if (outChars + text.length > MAX_CHARS) {
+      truncated = true;
+      text = text.slice(0, Math.max(0, MAX_CHARS - outChars)) + '\n… 輸出過長，已截斷\n';
+      cls = 'o-dim';
+    }
+    outChars += text.length;
+    var span = document.createElement('span');
+    span.className = cls;
+    span.textContent = text;
+    out.appendChild(span);
+    out.scrollTop = out.scrollHeight;
+  }
+  function clearOut() { out.textContent = ''; outChars = 0; truncated = false; timeEl.textContent = ''; }
+
+  // ── Worker ────────────────────────────────────────────
+  function startWorker() {
+    if (worker) { worker.terminate(); worker = null; }
+    setState('loading', '載入引擎中…');
+    var url;
+    try {
+      var blob = new Blob([$('worker-src').textContent], { type: 'text/javascript' });
+      url = URL.createObjectURL(blob);
+      worker = new Worker(url);
+    } catch (e) {
+      setState('fail', '無法啟動');
+      put('❌ 無法建立 Web Worker：' + e.message + '\n', 'o-err');
+      return;
+    }
+    worker.onmessage = function (ev) {
+      var m = ev.data;
+      if (m.type === 'ready') {
+        setState('ready', 'Python ' + m.version);
+        if (!out.textContent) put('// 引擎就緒，按 ▶ 執行\n', 'o-dim');
+      } else if (m.type === 'initfail') {
+        setState('fail', '引擎載入失敗');
+        put('❌ Pyodide 載入失敗：' + m.text + '\n', 'o-err');
+        put('// 請確認網路可連到 cdn.jsdelivr.net，並且不是在受限制的預覽視窗內開啟\n', 'o-dim');
+      } else if (m.type === 'out') {
+        put(m.text, 'o-out');
+      } else if (m.type === 'err') {
+        put(m.text, 'o-err');
+      } else if (m.type === 'sys') {
+        put('// ' + m.text, 'o-dim');
+      } else if (m.type === 'done') {
+        timeEl.textContent = '⏱ ' + m.ms + ' ms';
+        put('\n// 完成（' + m.ms + ' ms）\n', 'o-dim');
+        setState('ready', readyLabel);
+      } else if (m.type === 'error') {
+        put((out.textContent && !/\n$/.test(out.textContent) ? '\n' : '') + m.text + '\n', 'o-err');
+        timeEl.textContent = '⏱ ' + m.ms + ' ms';
+        setState('ready', readyLabel);
+      }
+    };
+    worker.onerror = function (ev) {
+      setState('fail', '引擎錯誤');
+      put('❌ Worker 錯誤：' + (ev.message || '未知') + '\n', 'o-err');
+    };
+    worker.postMessage({ type: 'init' });
+  }
+
+  // ── 執行 / 停止 ───────────────────────────────────────
+  function run() {
+    if (state !== 'ready') return;
+    var src = codeEl.value;
+    if (!src.trim()) { clearOut(); put('// 請先輸入程式碼\n', 'o-dim'); return; }
+    clearOut();
+    setState('busy', '執行中…');
+    worker.postMessage({ type: 'run', code: src });
+  }
+  function stop() {
+    if (state !== 'busy') return;
+    put('\n⏹ 已停止，正在重新啟動引擎…\n', 'o-sys');
+    startWorker(); // terminate 並重新載入（瀏覽器已快取，通常很快）
+  }
+
+  // ── 編輯器 ────────────────────────────────────────────
+  function updateGutter() {
+    var n = codeEl.value.split('\n').length, s = '';
+    for (var i = 1; i <= n; i++) s += i + (i < n ? '\n' : '');
+    gutter.textContent = s;
+    gutter.scrollTop = codeEl.scrollTop;
+  }
+  function insert(text) {
+    // execCommand 保留 undo 歷史；不支援時退回直接改 value
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (_) {}
+    if (!ok) {
+      var s = codeEl.selectionStart, e = codeEl.selectionEnd;
+      codeEl.value = codeEl.value.slice(0, s) + text + codeEl.value.slice(e);
+      codeEl.selectionStart = codeEl.selectionEnd = s + text.length;
+      codeEl.dispatchEvent(new Event('input'));
+    }
+  }
+  codeEl.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); return; }
+    if (e.key === 'Tab') { e.preventDefault(); insert('    '); return; }
+    if (e.key === 'Enter' && !e.isComposing) {
+      var v = codeEl.value, pos = codeEl.selectionStart;
+      var lineStart = v.lastIndexOf('\n', pos - 1) + 1;
+      var line = v.slice(lineStart, pos);
+      var indent = (line.match(/^[ \t]*/) || [''])[0];
+      if (/:\s*$/.test(line)) indent += '    ';
+      if (indent) { e.preventDefault(); insert('\n' + indent); }
+    }
+  });
+  codeEl.addEventListener('input', function () { updateGutter(); save(); });
+  codeEl.addEventListener('scroll', function () { gutter.scrollTop = codeEl.scrollTop; });
+
+  // ── 保存 ──────────────────────────────────────────────
+  var KEY = 'pysandbox:code';
+  function save() { try { localStorage.setItem(KEY, codeEl.value); } catch (_) {} }
+  function load() { try { return localStorage.getItem(KEY); } catch (_) { return null; } }
+
+  // ── 事件 ──────────────────────────────────────────────
+  runBtn.addEventListener('click', run);
+  stopBtn.addEventListener('click', stop);
+  $('clear').addEventListener('click', clearOut);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ex]'), function (b) {
+    b.addEventListener('click', function () {
+      codeEl.value = EXAMPLES[b.dataset.ex];
+      updateGutter(); save(); codeEl.scrollTop = 0;
+    });
+  });
+
+  // ── 啟動 ──────────────────────────────────────────────
+  codeEl.value = load() || EXAMPLES.hello;
+  updateGutter();
+  put('// 正在載入 Python 引擎（Pyodide），首次約需 5–15 秒…\n', 'o-dim');
+  startWorker();
+})();
+</script>
+</body>
+</html>
